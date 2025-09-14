@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ultimate Silly Space Battle 3.0</title>
+<style>
+    body { margin: 0; background: black; color: white; font-family: sans-serif; overflow: hidden; }
+    #gameCanvas { display: block; margin: auto; background: #111; border: 2px solid white; }
+    #upgradePanel { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; border: 1px solid white; }
+    button { margin: 5px; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div id="upgradePanel">
+    <div>Coins: <span id="coins">0</span></div>
+    <button onclick="buyUpgrade('damage')">Upgrade Damage (50)</button>
+    <button onclick="buyUpgrade('speed')">Upgrade Speed (50)</button>
+    <button onclick="buyUpgrade('power')">Unlock Power Shot (200)</button>
+</div>
+
+<script>
+// Canvas setup
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Player stats
+let coins = 0;
+let damage = 10;
+let shipSpeed = 5;
+let powerShotUnlocked = false;
+let score = 0;
+
+// Player spaceship
+const player = { x: 400, y: 500, width: 50, height: 50, bullets: [], powerShots: [] };
+
+// Bosses
+let bosses = [
+    { name: "Captain Sillypants", x: 100, y: 50, width: 100, height: 100, health: 100, dx: 2 },
+    { name: "Lord Rubber Chicken", x: 300, y: 50, width: 120, height: 120, health: 200, dx: 3 },
+    { name: "Space Clown", x: 500, y: 50, width: 150, height: 150, health: 300, dx: 4 },
+    { name: "Mega Chicken Overlord", x: 200, y: 50, width: 200, height: 200, health: 500, dx: 5 }
+];
+let currentBoss = 0;
+
+// Random hazards (Exploding Pies!)
+let pies = [];
+
+// Controls
+const keys = {};
+document.addEventListener('keydown', e => keys[e.key] = true);
+document.addEventListener('keyup', e => keys[e.key] = false);
+
+// Sounds
+const sounds = {
+    shoot: new Audio('https://freesound.org/data/previews/341/341695_6245058-lq.mp3'),
+    explode: new Audio('https://freesound.org/data/previews/135/135631_2398400-lq.mp3'),
+    power: new Audio('https://freesound.org/data/previews/66/66717_931655-lq.mp3')
+};
+
+// Shooting
+canvas.addEventListener('click', () => {
+    // Normal bullet
+    player.bullets.push({ x: player.x + player.width/2 - 5, y: player.y, width: 10, height: 20 });
+    sounds.shoot.play();
+
+    // Power shot
+    if (powerShotUnlocked) {
+        player.powerShots.push({ x: player.x + player.width/2 - 15, y: player.y, width: 30, height: 40 });
+        sounds.power.play();
+    }
+});
+
+// Upgrades
+function buyUpgrade(type) {
+    if (type === 'damage' && coins >= 50) { coins -= 50; damage += 5; }
+    else if (type === 'speed' && coins >= 50) { coins -= 50; shipSpeed += 1; }
+    else if (type === 'power' && coins >= 200) { coins -= 200; powerShotUnlocked = true; alert("Power Shot Unlocked! Click to fire HUGE lasers!"); }
+    else { alert("Not enough coins, space cadet!"); }
+    document.getElementById('coins').innerText = coins;
+}
+
+// Game Loop
+function gameLoop() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Move player
+    if (keys['ArrowLeft'] && player.x > 0) player.x -= shipSpeed;
+    if (keys['ArrowRight'] && player.x < canvas.width - player.width) player.x += shipSpeed;
+    if (keys['ArrowUp'] && player.y > 0) player.y -= shipSpeed;
+    if (keys['ArrowDown'] && player.y < canvas.height - player.height) player.y += shipSpeed;
+
+    // Draw player
+    ctx.fillStyle = 'cyan';
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    // Bullets
+    player.bullets.forEach((b,i)=> {
+        b.y -= 10;
+        ctx.fillStyle = 'yellow';
+        ctx.fillRect(b.x, b.y, b.width, b.height);
+        checkBossCollision(b, i, false);
+        if (b.y < 0) player.bullets.splice(i,1);
+    });
+
+    // Power shots
+    player.powerShots.forEach((p,i)=> {
+        p.y -= 15;
+        ctx.fillStyle = 'magenta';
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+        checkBossCollision(p, i, true);
+        if (p.y < 0) player.powerShots.splice(i,1);
+    });
+
+    // Animate boss
+    if (currentBoss < bosses.length) {
+        const boss = bosses[currentBoss];
+        boss.x += boss.dx;
+        if (boss.x + boss.width > canvas.width || boss.x < 0) boss.dx *= -1;
+
+        ctx.fillStyle = 'red';
+        ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+        ctx.fillStyle = 'white';
+        ctx.fillText(`${boss.name} HP: ${boss.health}`, boss.x, boss.y - 10);
+    }
+
+    // Exploding pies
+    if (Math.random() < 0.02) {
+        pies.push({ x: Math.random()*canvas.width, y: -20, size: 20, dy: 4 });
+    }
+    pies.forEach((pie,i)=> {
+        pie.y += pie.dy;
+        ctx.fillStyle = 'orange';
+        ctx.beginPath();
+        ctx.arc(pie.x, pie.y, pie.size, 0, Math.PI*2);
+        ctx.fill();
+        if (pie.y > canvas.height) pies.splice(i,1);
+        // collision with player
+        if (pie.x > player.x && pie.x < player.x+player.width && pie.y > player.y && pie.y < player.y+player.height) {
+            alert("You got hit by a flying exploding pie! Game Over!");
+            document.location.reload();
+        }
+    });
+
+    requestAnimationFrame(gameLoop);
+}
+
+// Collision check
+function checkBossCollision(bullet, index, isPower) {
+    if (currentBoss >= bosses.length) return;
+    const boss = bosses[currentBoss];
+    if (bullet.x < boss.x + boss.width && bullet.x + bullet.width > boss.x &&
+        bullet.y < boss.y + boss.height && bullet.y + bullet.height > boss.y) {
+        boss.health -= isPower ? damage * 3 : damage;
+        if (!isPower) player.bullets.splice(index,1); else player.powerShots.splice(index,1);
+        if (boss.health <= 0) {
+            coins += 100;
+            score += 500;
+            document.getElementById('coins').innerText = coins;
+            sounds.explode.play();
+            currentBoss++;
+            if (currentBoss >= bosses.length) {
+                alert("You defeated ALL bosses and survived the pies! Score: " + score);
+                currentBoss = 0;
+            }
+        }
+    }
+}
+
+gameLoop();
+</script>
+</body>
+</html>
